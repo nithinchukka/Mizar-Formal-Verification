@@ -1,0 +1,273 @@
+:: Definition of Ascon_StateArray function
+:: Maps a 320-bit input (as a 320-tuple of BOOLEAN) to a 5x8x8 state array
+definition
+  func Ascon_StateArray -> Function of 320-tuples_on BOOLEAN,
+  5-tuples_on(8-tuples_on (8-tuples_on BOOLEAN)) means
+  :DefStatearray:
+    for input being Element of 320-tuples_on BOOLEAN
+    for i, j being Nat st i in Seg 5 & j in Seg 8
+    holds ((it.input).i).j = mid (input, 1+(i-'1)*8+(j-'1)*40,
+    1+(i-'1)*8+(j-'1)*40+7);
+end;
+
+:: Definition of Ascon_AddRoundKey function
+:: Performs XOR operation between state and round key for Ascon's key addition
+definition
+  func Ascon_AddRoundKey ->
+  Function of [:5-tuples_on(8-tuples_on (8-tuples_on BOOLEAN)),
+  5-tuples_on(8-tuples_on (8-tuples_on BOOLEAN)):],
+  5-tuples_on(8-tuples_on (8-tuples_on BOOLEAN)) means
+  :DefCustomAddRoundKey:
+  for A, B be Element of 5-tuples_on(8-tuples_on (8-tuples_on BOOLEAN))
+  holds for i be Nat st i in Seg 5
+  holds for j be Nat st j in Seg 8
+  holds ex A3j, Bij be Element of 8-tuples_on BOOLEAN
+  st A3j = (A.3).j & Bij = (B.i).j &
+  ((it.(A,B)).i).j = Op-XOR(Bij, A3j);
+end;
+
+begin
+
+
+:: Definition of Ascon_SubBytes function
+:: Applies the Ascon S-box to the state, performing non-linear substitution
+definition
+  func Ascon_SubBytes -> 
+    Function of 5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)),
+                5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) means
+  :DefAsconSubBytes:
+  for state being Element of 
+    5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) holds
+    ex x0,x1,x2,x3,x4,t0,t1,t2,t3,t4 being 
+      Element of 8-tuples_on(8-tuples_on BOOLEAN) st
+      x0 = state.1 & x1 = state.2 & x2 = state.3 & 
+      x3 = state.4 & x4 = state.5 &
+      x0 = state.1 xor state.5 &
+      x4 = state.5 xor state.4 &
+      x2 = state.3 xor state.2 &
+      t0 = x0 & t1 = x1 & t2 = x2 & t3 = x3 & t4 = x4 &
+      t0 = 'not' t0 & t1 = 'not' t1 & t2 = 'not' t2 & 
+      t3 = 'not' t3 & t4 = 'not' t4 &
+      t0 = t0 '&' x1 & t1 = t1 '&' x2 & t2 = t2 '&' x3 & 
+      t3 = t3 '&' x4 & t4 = t4 '&' x0 &
+      x0 = x0 xor t1 & x1 = x1 xor t2 & x2 = x2 xor t3 & 
+      x3 = x3 xor t4 & x4 = x4 xor t0 &
+      x1 = x1 xor x0 & x0 = x0 xor x4 & 
+      x3 = x3 xor x2 & x2 = 'not' x2 &
+      it = <* x0, x1, x2, x3, x4 *>;
+end;
+
+:: Definition of Ascon_InverseSubBytes function
+:: Applies the inverse Ascon S-box for decryption
+definition
+  let SBT;
+  func Ascon_InverseSubBytes -> 
+    Function of 5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)),
+                5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) means
+  :DefInvAsconSubBytes:
+  for state being Element of 
+    5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) holds
+    ex y0,y1,y2,y3,y4,u0,u1,u2,u3,u4 being 
+      Element of 8-tuples_on(8-tuples_on BOOLEAN) st
+      y0 = state.1 & y1 = state.2 & y2 = state.3 & 
+      y3 = state.4 & y4 = state.5 &
+      y2 = 'not' y2 &
+      y3 = y3 xor y2 &
+      y0 = y0 xor y4 &
+      y1 = y1 xor y0 &
+      u0 = y0 & u1 = y1 & u2 = y2 & u3 = y3 & u4 = y4 &
+      u0 = u0 '&' y1 & u1 = u1 '&' y2 & u2 = u2 '&' y3 & 
+      u3 = u3 '&' y4 & u4 = u4 '&' y0 &
+      u0 = 'not' u0 & u1 = 'not' u1 & u2 = 'not' u2 & 
+      u3 = 'not' u3 & u4 = 'not' u4 &
+      y0 = y0 xor u1 & y1 = y1 xor u2 & y2 = y2 xor u3 & 
+      y3 = y3 xor u4 & y4 = y4 xor u0 &
+      y0 = y0 xor y4 & 
+      y4 = y4 xor y3 & 
+      y2 = y2 xor y1 &
+      it = <* y0, y1, y2, y3, y4 *>;
+end;
+
+:: Definition of Ascon_ShiftRows function
+:: Performs row-wise rotations on the Ascon state
+definition
+  func Ascon_ShiftRows -> 
+  Function of 5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)), 
+  5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) means
+  :DefShiftRows:
+  for input be Element of 5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) 
+  holds (
+    ex out be Element of 5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) st
+      (for i be Nat st i in Seg 5 holds
+        ex xi, x1, x2 be Element of 8-tuples_on(8-tuples_on BOOLEAN) st
+          xi = input.i &
+          (i = 1 implies (
+              x1 = Op-Shift(xi,19) &
+              x2 = Op-Shift(xi,28)
+          )) &
+          (i = 2 implies (
+              x1 = Op-Shift(xi,61) &
+              x2 = Op-Shift(xi,39)
+          )) &
+          (i = 3 implies (
+              x1 = Op-Shift(xi,1) &
+              x2 = Op-Shift(xi,6)
+          )) &
+          (i = 4 implies (
+              x1 = Op-Shift(xi,10) &
+              x2 = Op-Shift(xi,17)
+          )) &
+          (i = 5 implies (
+              x1 = Op-Shift(xi,7) &
+              x2 = Op-Shift(xi,41)
+          )) &
+    out.i = Op-Xor(xi, Op-Xor(x1, x2))          
+      ) & it.input = out
+  );
+end;
+
+:: Definition of Ascon_InverseShiftRows function
+:: Performs inverse row-wise rotations for Ascon decryption
+definition
+  func Ascon_InverseShiftRows -> 
+  Function of 5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)), 
+  5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) means
+  :DefInverseShiftRows:
+  for input be Element of 5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) 
+  holds (
+    ex out be Element of 5-tuples_on(8-tuples_on(8-tuples_on BOOLEAN)) st
+      (for i be Nat st i in Seg 5 holds
+        ex xi be Element of 8-tuples_on(8-tuples_on BOOLEAN) st
+          xi = input.i &
+          (i = 1 implies (
+              out.i = Op-WXOR(Op-Shift(xi, 18), 
+                      Op-WXor(Op-Shift(xi, 19), 
+                      Op-WXor(Op-Shift(xi, 21), 
+                      Op-WXor(Op-Shift(xi, 22), 
+                      Op-WXor(Op-Shift(xi, 24), 
+                      Op-WXor(Op-Shift(xi, 25), 
+                      Op-WXor(Op-Shift(xi, 27), 
+                      Op-WXor(Op-Shift(xi, 30), 
+                      Op-WXor(Op-Shift(xi, 33), 
+                      Op-WXor(Op-Shift(xi, 36), 
+                      Op-WXor(Op-Shift(xi, 38), 
+                      Op-WXor(Op-Shift(xi, 39), 
+                      Op-WXor(Op-Shift(xi, 41), 
+                      Op-WXor(Op-Shift(xi, 42), 
+                      Op-WXor(Op-Shift(xi, 44), 
+                      Op-WXor(Op-Shift(xi, 45), 
+                      Op-WXor(Op-Shift(xi, 47), 
+                      Op-WXor(Op-Shift(xi, 50), 
+                      Op-WXor(Op-Shift(xi, 53), 
+                      Op-Wor(Op-Shift(xi, 57), 
+                      Op-WXor(Op-Shift(xi, 60), 
+                      Op-Shift(xi, 63)))))))))))))))))))))))
+          )) &
+          (i = 2 implies (
+              out.i = Op-WXor(Op-Shift(xi, 16), 
+                      Op-WXor(Op-Shift(xi, 19), 
+                      Op-WXor(Op-Shift(xi, 21), 
+                      Op-WXor(Op-Shift(xi, 23), 
+                      Op-WXor(Op-Shift(xi, 24), 
+                      Op-WXor(Op-Shift(xi, 25), 
+                      Op-WXor(Op-Shift(xi, 27), 
+                      Op-WXor(Op-Shift(xi, 28), 
+                      Op-WXor(Op-Shift(xi, 29), 
+                      Op-WXor(Op-Shift(xi, 30), 
+                      Op-WXor(Op-Shift(xi, 33), 
+                      Op-WXor(Op-Shift(xi, 39), 
+                      Op-WXor(Op-Shift(xi, 43), 
+                      Op-WXor(Op-Shift(xi, 44), 
+                      Op-WXor(Op-Shift(xi, 45), 
+                      Op-WXor(Op-Shift(xi, 47), 
+                      Op-WXor(Op-Shift(xi, 48), 
+                      Op-WXor(Op-Shift(xi, 51), 
+                      Op-WXor(Op-Shift(xi, 53), 
+                      Op-WXor(Op-Shift(xi, 54), 
+                      Op-WXor(Op-Shift(xi, 55), 
+                      Op-WXor(Op-Shift(xi, 57), 
+                      Op-WXor(Op-Shift(xi, 60), 
+                      Op-Shift(xi, 61))))))))))))))))))))))))
+          )) &
+          (i = 3 implies (
+              out.i = Op-WXor(Op-Shift(xi, 15), 
+                      Op-WXor(Op-Shift(xi, 17), 
+                      Op-WXor(Op-Shift(xi, 18), 
+                      Op-WXor(Op-Shift(xi, 20), 
+                      Op-WXor(Op-Shift(xi, 23), 
+                      Op-WXor(Op-Shift(xi, 26), 
+                      Op-WXor(Op-Shift(xi, 27), 
+                      Op-WXor(Op-Shift(xi, 28), 
+                      Op-WXor(Op-Shift(xi, 32), 
+                      Op-WXor(Op-Shift(xi, 34), 
+                      Op-WXor(Op-Shift(xi, 35), 
+                      Op-WXor(Op-Shift(xi, 36), 
+                      Op-WXor(Op-Shift(xi, 37), 
+                      Op-WXor(Op-Shift(xi, 40), 
+                      Op-WXor(Op-Shift(xi, 42), 
+                      Op-WXor(Op-Shift(xi, 46), 
+                      Op-WXor(Op-Shift(xi, 47), 
+                      Op-WXor(Op-Shift(xi, 52), 
+                      Op-WXor(Op-Shift(xi, 58), 
+                      Op-WXor(Op-Shift(xi, 59), 
+                      Op-WXor(Op-Shift(xi, 60), 
+                      Op-WXor(Op-Shift(xi, 61), 
+                      Op-WXor(Op-Shift(xi, 62), 
+                      Op-Shift(xi, 63))))))))))))))))))))))))
+          )) &
+          (i = 4 implies (
+              out.i = Op-WXor(Op-Shift(xi, 21), 
+                      Op-WXor(Op-Shift(xi, 22), 
+                      Op-WXor(Op-Shift(xi, 23), 
+                      Op-WXor(Op-Shift(xi, 24), 
+                      Op-WXor(Op-Shift(xi, 26), 
+                      Op-WXor(Op-Shift(xi, 27), 
+                      Op-WXor(Op-Shift(xi, 28), 
+                      Op-WXor(Op-Shift(xi, 29), 
+                      Op-WXor(Op-Shift(xi, 31), 
+                      Op-WXor(Op-Shift(xi, 32), 
+                      Op-WXor(Op-Shift(xi, 33), 
+                      Op-WXor(Op-Shift(xi, 35), 
+                      Op-WXor(Op-Shift(xi, 36), 
+                      Op-WXor(Op-Shift(xi, 37), 
+                      Op-WXor(Op-Shift(xi, 40), 
+                      Op-WXor(Op-Shift(xi, 42), 
+                      Op-WXor(Op-Shift(xi, 44), 
+                      Op-WXor(Op-Shift(xi, 47), 
+                      Op-WXor(Op-Shift(xi, 48), 
+                      Op-WXor(Op-Shift(xi, 49), 
+                      Op-WXor(Op-Shift(xi, 53), 
+                      Op-WXor(Op-Shift(xi, 61), 
+                      Op-Shift(xi, 63)))))))))))))))))))))))
+          )) &
+          (i = 5 implies (
+              out.i = Op-WXor(Op-Shift(xi, 13), 
+                      Op-WXor(Op-Shift(xi, 16), 
+                      Op-WXor(Op-Shift(xi, 20), 
+                      Op-WXor(Op-Shift(xi, 21), 
+                      Op-WXor(Op-Shift(xi, 22), 
+                      Op-WXor(Op-Shift(xi, 24), 
+                      Op-WXor(Op-Shift(xi, 25), 
+                      Op-WXor(Op-Shift(xi, 28), 
+                      Op-WXor(Op-Shift(xi, 29), 
+                      Op-WXor(Op-Shift(xi, 30), 
+                      Op-WXor(Op-Shift(xi, 31), 
+                      Op-WXor(Op-Shift(xi, 35), 
+                      Op-WXor(Op-Shift(xi, 36), 
+                      Op-WXor(Op-Shift(xi, 40), 
+                      Op-WXor(Op-Shift(xi, 41), 
+                      Op-WXor(Op-Shift(xi, 44), 
+                      Op-WXor(Op-Shift(xi, 45), 
+                      Op-WXor(Op-Shift(xi, 46), 
+                      Op-WXor(Op-Shift(xi, 47), 
+                      Op-WXor(Op-Shift(xi, 48), 
+                      Op-WXor(Op-Shift(xi, 50), 
+                      Op-WXor(Op-Shift(xi, 53), 
+                      Op-WXor(Op-Shift(xi, 55), 
+                      Op-WXor(Op-Shift(xi, 60), 
+                      Op-WXor(Op-Shift(xi, 61), 
+                      Op-Shift(xi, 63)))))))))))))))))))))))))
+          ))
+      ) & it.input = out
+  );
+end;
